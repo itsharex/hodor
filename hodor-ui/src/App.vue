@@ -1,7 +1,8 @@
-<template>
-  <!-- 跳转到home -->
-  <router-view />
-</template>
-
-<script>
+<script setup>
+import { RouterView } from 'vue-router';
 </script>
+
+<template>
+  <!-- 一级路由 -->
+  <RouterView />
+</template>

@@ -17,6 +17,10 @@
 
 package org.dromara.hodor.admin.service;
 
+import java.util.List;
+import org.dromara.hodor.admin.domain.SchedulerNodeInfo;
+import org.dromara.hodor.model.scheduler.HodorMetadata;
+
 /**
  * ScheduleOperatorService
  *
@@ -25,4 +29,18 @@ package org.dromara.hodor.admin.service;
  */
 public interface ScheduleOperatorService {
 
+    /**
+     * 获取调度节点列表
+     *
+     * @return 调度节点列表信息
+     */
+    List<SchedulerNodeInfo> getSchedulers() throws Exception;
+
+    /**
+     * 获取节点元数据
+     *
+     * @param endpoint 节点
+     * @return 元数据
+     */
+    HodorMetadata getMetadata(String endpoint) throws Exception;
 }
