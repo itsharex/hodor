@@ -3,22 +3,20 @@ package org.dromara.hodor.server.manager;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
+import org.dromara.hodor.common.Host;
+import org.dromara.hodor.common.concurrent.HodorThreadFactory;
+import org.dromara.hodor.common.utils.Pair;
+import org.dromara.hodor.common.utils.TimeUtil;
+import org.dromara.hodor.common.utils.Utils;
+import org.dromara.hodor.model.job.JobKey;
+import org.dromara.hodor.model.node.NodeInfo;
+
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
-import org.dromara.hodor.common.Host;
-import org.dromara.hodor.common.concurrent.HodorThreadFactory;
-import org.dromara.hodor.common.utils.TimeUtil;
-import org.dromara.hodor.model.actuator.ActuatorInfo;
-import org.dromara.hodor.model.job.JobKey;
-import org.dromara.hodor.model.node.NodeInfo;
 
 /**
  * actuator node manager
@@ -31,14 +29,19 @@ public class ActuatorNodeManager {
 
     private static volatile ActuatorNodeManager INSTANCE;
 
-    // groupName -> endpoint set
-    private final Map<String, Set<String>> actuatorEndpoints = Maps.newConcurrentMap();
+    private final Set<String> clusters = Sets.newConcurrentHashSet();
+
+    // clusterName -> endpoint set
+    private final Map<String, Set<String>> actuatorClusterEndpoints = Maps.newConcurrentMap();
 
     // clusterName -> groupName set
     private final Map<String, Set<String>> clusterGroupMap = Maps.newConcurrentMap();
 
+    // groupName -> clusterName set
+    private final Map<String, String> groupClusterMap = Maps.newConcurrentMap();
+
     // endpoint -> actuatorNodeInfo
-    private final Map<String, ActuatorInfo> actuatorNodeInfos = Maps.newConcurrentMap();
+    private final Map<String, Pair<NodeInfo, Long>> actuatorNodeInfos = Maps.newConcurrentMap();
 
     private static final int HEARTBEAT_THRESHOLD = 30_000;
 
@@ -67,8 +70,8 @@ public class ActuatorNodeManager {
     public void offlineActuatorClean() {
         log.info("offline actuator clean ...");
         actuatorNodeInfos.entrySet().removeIf(entry -> {
-            ActuatorInfo actuatorInfo = entry.getValue();
-            if (heartbeatThresholdExceedCheck(actuatorInfo.getLastHeartbeat())) {
+            final Pair<NodeInfo, Long> nodePair = entry.getValue();
+            if (heartbeatThresholdExceedCheck(nodePair.getSecond())) {
                 String endpoint = entry.getKey();
                 removeNode(endpoint);
                 return true;
@@ -79,26 +82,19 @@ public class ActuatorNodeManager {
 
     private void removeNode(String endpoint) {
         actuatorNodeInfos.remove(endpoint);
-        actuatorEndpoints.values().forEach(endpoints -> endpoints.removeIf(e -> e.equals(endpoint)));
-    }
-
-    public void addActuatorEndpoint(String groupName, String nodeEndpoint) {
-        Set<String> endpoints = actuatorEndpoints.computeIfAbsent(groupName, e -> Sets.newConcurrentHashSet());
-        endpoints.add(nodeEndpoint);
-    }
-
-    public void removeActuatorGroup(String groupName, String nodeEndpoint) {
-        Optional.ofNullable(actuatorEndpoints.get(groupName)).ifPresent(endpoints -> endpoints.removeIf(endpoint -> endpoint.equals(nodeEndpoint)));
+        actuatorClusterEndpoints.values().forEach(endpoints -> endpoints.removeIf(e -> e.equals(endpoint)));
     }
 
     public Set<String> getActuatorEndpointsByGroupName(final String groupName) {
-        return actuatorEndpoints.getOrDefault(groupName, Sets.newConcurrentHashSet());
+        final String clusterName = groupClusterMap.get(groupName);
+        Utils.Assert.notNull(clusterName, "Group [{}] not found actuator cluster", groupName);
+        return actuatorClusterEndpoints.getOrDefault(clusterName, Sets.newConcurrentHashSet());
     }
 
     public boolean isOffline(String endpoint) {
         final long lastHeartbeat = Optional.ofNullable(actuatorNodeInfos.get(endpoint))
-            .orElse(ActuatorInfo.builder().lastHeartbeat(0).build())
-            .getLastHeartbeat();
+            .orElse(new Pair<>(null, 0L))
+            .getSecond();
         return heartbeatThresholdExceedCheck(lastHeartbeat);
     }
 
@@ -107,7 +103,9 @@ public class ActuatorNodeManager {
     }
 
     public void clearActuatorNodes() {
-        actuatorEndpoints.clear();
+        actuatorClusterEndpoints.clear();
+        clusterGroupMap.clear();
+        groupClusterMap.clear();
         actuatorNodeInfos.clear();
     }
 
@@ -125,47 +123,62 @@ public class ActuatorNodeManager {
             .collect(Collectors.toList());
     }
 
-    public void addActuatorNode(String nodeEndpoint, NodeInfo nodeInfo) {
-        ActuatorInfo actuatorInfo = actuatorNodeInfos.computeIfAbsent(nodeEndpoint, k -> ActuatorInfo.builder()
-            .nodeEndpoint(nodeEndpoint)
-            .groupNames(Sets.newHashSet())
-            .build());
-        actuatorInfo.setNodeInfo(nodeInfo);
-    }
-
-    public NodeInfo getActuatorNode(String nodeEndpoint) {
-        ActuatorInfo actuatorNodeInfo = Optional.ofNullable(actuatorNodeInfos.get(nodeEndpoint))
-            .orElse(ActuatorInfo.builder()
-                .nodeInfo(new NodeInfo())
-                .build());
-        return actuatorNodeInfo.getNodeInfo();
-    }
-
-    public void removeActuatorNode(String nodeEndpoint) {
-        actuatorNodeInfos.remove(nodeEndpoint);
-    }
-
-    public void addActuatorNodeInfo(String groupName, String nodeEndpoint, long lastHeartbeat) {
-        ActuatorInfo actuatorInfo = actuatorNodeInfos.computeIfAbsent(nodeEndpoint, k -> ActuatorInfo.builder()
-            .nodeEndpoint(nodeEndpoint)
-            .groupNames(Sets.newHashSet(groupName))
-            .lastHeartbeat(lastHeartbeat)
-            .build());
-        actuatorInfo.getGroupNames().add(groupName);
-        actuatorInfo.setLastHeartbeat(lastHeartbeat);
-    }
-
     public Set<String> getGroupByClusterName(String clusterName) {
         return clusterGroupMap.getOrDefault(clusterName, new HashSet<>());
     }
 
+    public String getClusterNameByGroup(String groupName) {
+        return groupClusterMap.get(groupName);
+    }
+
     public void addClusterGroupEntry(String clusterName, String groupName) {
-        Set<String> groupSet = clusterGroupMap.computeIfAbsent(clusterName, Sets::newHashSet);
+        Set<String> groupSet = clusterGroupMap.computeIfAbsent(clusterName, k -> Sets.newHashSet());
         groupSet.add(groupName);
+        groupClusterMap.put(groupName, clusterName);
     }
 
     public void removeClusterGroupEntry(String clusterName, String groupName) {
-        Set<String> groupSet = clusterGroupMap.computeIfAbsent(clusterName, Sets::newHashSet);
-        groupSet.remove(groupName);
+        Set<String> groupSet = clusterGroupMap.get(clusterName);
+        if (groupSet != null) {
+            groupSet.remove(groupName);
+        }
+        groupClusterMap.remove(groupName);
     }
+
+    public void addActuatorClusterEndpoint(String clusterName, String nodeEndpoint) {
+        clusters.add(clusterName);
+        final Set<String> endpoints = actuatorClusterEndpoints.computeIfAbsent(clusterName, k -> Sets.newHashSet());
+        endpoints.add(nodeEndpoint);
+    }
+
+    public void addActuatorClusterNodeInfo(String nodeEndpoint, NodeInfo nodeInfo, long lastHeartbeat) {
+        actuatorNodeInfos.put(nodeEndpoint, new Pair<>(nodeInfo, lastHeartbeat));
+    }
+
+    public void removeActuatorClusterEndpoint(String clusterName, String nodeEndpoint) {
+        if (actuatorClusterEndpoints.containsKey(clusterName)) {
+            Set<String> endpoints = actuatorClusterEndpoints.get(clusterName);
+            endpoints.removeIf(e -> e.equals(nodeEndpoint));
+            if (Utils.Collections.isEmpty(endpoints)) {
+                actuatorClusterEndpoints.remove(clusterName);
+            }
+        }
+    }
+
+    public void removeActuatorClusterNodeInfo(String nodeEndpoint) {
+        actuatorNodeInfos.remove(nodeEndpoint);
+    }
+
+    public Pair<NodeInfo, Long> getActuatorNodeInfo(String endpoint) {
+        return actuatorNodeInfos.get(endpoint);
+    }
+
+    public Set<String> getActuatorClusterEndpoints(String clusterName) {
+        return actuatorClusterEndpoints.get(clusterName);
+    }
+
+    public Set<String> allClusters() {
+        return clusters;
+    }
+
 }
