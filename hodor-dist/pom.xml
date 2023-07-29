@@ -14,6 +14,8 @@
         <module>hodor-scheduler-server-dist</module>
         <module>hodor-actuator-java-dist</module>
         <module>hodor-actuator-bigdata-dist</module>
+        <module>hodor-actuator-examples-dist</module>
+        <module>hodor-actuator-agent-dist</module>
     </modules>
 
     <properties>

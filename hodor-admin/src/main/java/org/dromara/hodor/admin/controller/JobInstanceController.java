@@ -5,7 +5,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.dromara.hodor.admin.core.Result;
 import org.dromara.hodor.admin.core.ResultUtil;
+import org.dromara.hodor.admin.service.ActuatorOperatorService;
 import org.dromara.hodor.admin.service.LogService;
+import org.dromara.hodor.client.model.KillJobResult;
 import org.dromara.hodor.client.model.LogQueryRequest;
 import org.dromara.hodor.client.model.LogQueryResult;
 import org.dromara.hodor.core.PageInfo;
@@ -30,15 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("jobExecDetail")
 @RequiredArgsConstructor
-public class JobExecDetailReporterController {
+public class JobInstanceController {
 
     private final JobExecDetailService jobExecDetailService;
 
     private final LogService logService;
 
+    private final ActuatorOperatorService actuatorOperatorService;
+
     @Operation(summary = "分页查询任务执行明细")
     @GetMapping
-    public Result<PageInfo<JobExecDetail>> queryByPage(@RequestBody JobExecDetail jobExecDetail,
+    public Result<PageInfo<JobExecDetail>> queryByPage(JobExecDetail jobExecDetail,
                                                  @RequestParam(value = "pageNo") Integer pageNo,
                                                  @RequestParam(value = "pageSize") Integer pageSize) {
         PageInfo<JobExecDetail> pageInfo = jobExecDetailService.queryByPage(jobExecDetail, pageNo, pageSize);
@@ -66,8 +70,14 @@ public class JobExecDetailReporterController {
 
     @Operation(summary = "任务执行日志查看")
     @GetMapping("/logs")
-    public Result<LogQueryResult> queryLog(@RequestParam LogQueryRequest request) throws Exception {
+    public Result<LogQueryResult> queryLog(LogQueryRequest request) throws Exception {
         return ResultUtil.success(logService.queryLog(request));
+    }
+
+    @Operation(summary = "杀死正在执行的任务")
+    @PutMapping("/kill")
+    public Result<KillJobResult> killRunningJob(@RequestBody JobExecDetail jobExecDetail) throws Exception {
+        return ResultUtil.success(actuatorOperatorService.killRunningJob(jobExecDetail));
     }
 
 }

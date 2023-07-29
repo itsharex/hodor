@@ -25,6 +25,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.hodor.client.exception.HodorClientException;
+import org.dromara.hodor.client.model.KillJobRequest;
+import org.dromara.hodor.client.model.KillJobResult;
 import org.dromara.hodor.client.model.LogQueryRequest;
 import org.dromara.hodor.client.model.LogQueryResult;
 import org.dromara.hodor.common.Host;
@@ -42,8 +44,11 @@ import org.dromara.hodor.remoting.api.RemotingMessageSerializer;
 import org.dromara.hodor.remoting.api.message.Header;
 import org.dromara.hodor.remoting.api.message.MessageType;
 import org.dromara.hodor.remoting.api.message.RemotingMessage;
+import org.dromara.hodor.remoting.api.message.RemotingResponse;
 import org.dromara.hodor.remoting.api.message.request.JobExecuteLogRequest;
+import org.dromara.hodor.remoting.api.message.request.KillRunningJobRequest;
 import org.dromara.hodor.remoting.api.message.response.JobExecuteLogResponse;
+import org.dromara.hodor.remoting.api.message.response.KillRunningJobResponse;
 
 /**
  * ActuatorApi
@@ -64,16 +69,21 @@ public class ActuatorApi {
 
     private final RemotingClient remotingClient;
 
+    private final TypeReference<RemotingResponse<JobExecuteLogResponse>> logResponseTypeReference;
+    private final TypeReference<RemotingResponse<KillRunningJobResponse>> killResponseTypeReference;
+
     public ActuatorApi(ConnectStringParser connectStringParser, String appName, String appKey) {
         this.connectStringParser = connectStringParser;
         this.appName = appName;
         this.appKey = appKey;
         this.serializer = ExtensionLoader.getExtensionLoader(RemotingMessageSerializer.class).getDefaultJoin();
         this.remotingClient = RemotingClient.getInstance();
+        this.logResponseTypeReference = new TypeReference<RemotingResponse<JobExecuteLogResponse>>() {};
+        this.killResponseTypeReference = new TypeReference<RemotingResponse<KillRunningJobResponse>>() {};
     }
 
     public LogQueryResult queryLog(LogQueryRequest request) throws ExecutionException, InterruptedException, TimeoutException {
-        final int timeout = request.getTimeout() > 0 ? request.getTimeout() : 3;
+        final int timeout = request.getTimeout() > 0 ? request.getTimeout() : 3000;
         Host host = Host.of(request.getActuatorEndpoint());
         JobExecuteLogRequest executeLogRequest = new JobExecuteLogRequest();
         executeLogRequest.setRequestId(request.getRequestId());
@@ -82,22 +92,26 @@ public class ActuatorApi {
         executeLogRequest.setOffset(request.getOffset());
         executeLogRequest.setLength(request.getLength());
 
-        final JobExecuteLogResponse jobExecuteLogResponse = getJobExecuteLogResponse(host, executeLogRequest, timeout);
+        final RemotingResponse<JobExecuteLogResponse> jobExecuteLogResponse = getJobExecuteLogResponse(host, executeLogRequest, timeout);
+        if (!jobExecuteLogResponse.isSuccess()) {
+            throw new HodorClientException("QueryLog failure, " + jobExecuteLogResponse.getMsg());
+        }
+        final JobExecuteLogResponse logResponseData = jobExecuteLogResponse.getData();
         LogQueryResult queryResult = new LogQueryResult();
-        queryResult.setOffset(jobExecuteLogResponse.getOffset());
-        queryResult.setLength(jobExecuteLogResponse.getLength());
-        queryResult.setLogData(jobExecuteLogResponse.getData());
+        queryResult.setOffset(logResponseData.getOffset());
+        queryResult.setLength(logResponseData.getLength());
+        queryResult.setLogData(logResponseData.getData());
         return queryResult;
     }
 
-    private JobExecuteLogResponse getJobExecuteLogResponse(Host host, JobExecuteLogRequest executeLogRequest, int timeout) throws InterruptedException, ExecutionException, TimeoutException {
+    private RemotingResponse<JobExecuteLogResponse> getJobExecuteLogResponse(Host host, JobExecuteLogRequest executeLogRequest, int timeout) throws InterruptedException, ExecutionException, TimeoutException {
         final byte[] bodyBytes = serializer.serialize(executeLogRequest);
         RemotingMessage requestMessage = RemotingMessage.builder()
             .header(buildJobLogHeader(bodyBytes.length, executeLogRequest))
             .body(bodyBytes)
             .build();
         final RemotingMessage remotingMessage = remotingClient.sendSyncRequest(host, requestMessage, timeout);
-        return serializer.deserialize(remotingMessage.getBody(), JobExecuteLogResponse.class);
+        return serializer.deserialize(remotingMessage.getBody(), logResponseTypeReference.getType());
     }
 
     private Header buildJobLogHeader(int bodyLength, JobExecuteLogRequest request) {
@@ -152,8 +166,7 @@ public class ActuatorApi {
         }
         log.debug("ListBinding result: {}", response.body());
         final HodorResult<List<BindingInfo>> hodorResult = Jsons.toBean(response.body(),
-            new TypeReference<HodorResult<List<BindingInfo>>>() {
-            }, false);
+            new TypeReference<HodorResult<List<BindingInfo>>>() {});
         if (!hodorResult.isSuccess()) {
             throw new HodorClientException(hodorResult.getMsg());
         }
@@ -167,12 +180,11 @@ public class ActuatorApi {
                 .execute(),
             ex -> new HodorClientException("ActuatorApi actuatorInfos execute failure, " + ex.getMessage()));
         if (!Objects.requireNonNull(response).isOk()) {
-            throw new HodorClientException("Unbinding failure, " + response.body());
+            throw new HodorClientException("Get actuatorInfos failure, " + response.body());
         }
         log.debug("ListBinding result: {}", response.body());
         final HodorResult<List<ActuatorInfo>> hodorResult = Jsons.toBean(response.body(),
-            new TypeReference<HodorResult<List<ActuatorInfo>>>() {
-            }, false);
+            new TypeReference<HodorResult<List<ActuatorInfo>>>() {});
         if (!hodorResult.isSuccess()) {
             throw new HodorClientException(hodorResult.getMsg());
         }
@@ -190,11 +202,45 @@ public class ActuatorApi {
         }
         log.debug("ListBinding result: {}", response.body());
         final HodorResult<List<String>> hodorResult = Jsons.toBean(response.body(),
-            new TypeReference<HodorResult<List<String>>>() {
-            }, false);
+            new TypeReference<HodorResult<List<String>>>() {});
         if (!hodorResult.isSuccess()) {
             throw new HodorClientException(hodorResult.getMsg());
         }
         return hodorResult.getData();
+    }
+
+    public KillJobResult killRunningJob(KillJobRequest request) throws ExecutionException, InterruptedException, TimeoutException {
+        final int timeout = request.getTimeout() > 0 ? request.getTimeout() : 3000;
+        Host host = Host.of(request.getActuatorEndpoint());
+        KillRunningJobRequest killRunningJobRequest = new KillRunningJobRequest();
+        killRunningJobRequest.setRequestId(request.getRequestId());
+        final RemotingResponse<KillRunningJobResponse> killRunningJobResponse = getKillRunningJobResponse(host, killRunningJobRequest, timeout);
+        if (!killRunningJobResponse.isSuccess()) {
+            throw new HodorClientException("Kill Job Failure, " + killRunningJobResponse.getMsg());
+        }
+        final KillRunningJobResponse killResponseData = killRunningJobResponse.getData();
+        KillJobResult killJobResult = new KillJobResult();
+        killJobResult.setStatus(killResponseData.getStatus());
+        killJobResult.setCompleteTime(killResponseData.getCompleteTime());
+        return killJobResult;
+    }
+
+    private RemotingResponse<KillRunningJobResponse> getKillRunningJobResponse(Host host, KillRunningJobRequest killRunningJobRequest, int timeout) throws InterruptedException, ExecutionException, TimeoutException {
+        final byte[] bodyBytes = serializer.serialize(killRunningJobRequest);
+        RemotingMessage requestMessage = RemotingMessage.builder()
+            .header(buildKillRunningJobHeader(bodyBytes.length, killRunningJobRequest))  // 创建请求头
+            .body(bodyBytes)  // 请求体
+            .build();
+        final RemotingMessage remotingMessage = remotingClient.sendSyncRequest(host, requestMessage, timeout);
+        return serializer.deserialize(remotingMessage.getBody(), killResponseTypeReference.getType());
+    }
+
+    private Header buildKillRunningJobHeader(int bodyLength, KillRunningJobRequest request) {
+        return Header.builder()
+            .id(request.getRequestId())
+            .version(RemotingConst.DEFAULT_VERSION)
+            .type(MessageType.KILL_JOB_REQUEST.getType())
+            .length(bodyLength)
+            .build();
     }
 }

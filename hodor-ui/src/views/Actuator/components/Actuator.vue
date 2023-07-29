@@ -40,6 +40,9 @@ const getActuatorList = async () => {
 // 处理响应数据中执行器节点信息
 const getActuatorNodes = (data) => {
     const res = []
+    if (data === null) {
+        return res;
+    }
     data.forEach(actuator => {
         res.push({
             "name": actuator.name,
@@ -69,10 +72,10 @@ onMounted(() => {
 
 // ############ 搜索 #############
 // 搜索执行节点
-const appName = ref('')
+const name = ref('')
 const onSearch = async () => {
-    if (appName.value.length !== 0) {
-        const res = await getActuatorInfoAPI(appName.value)
+    if (name.value.length !== 0) {
+        const res = await getActuatorInfoAPI(name.value)
         actuatorList.value = []
         // 响应对象非空
         if (res.data && JSON.stringify(res.data) !== '{}') {
@@ -81,7 +84,6 @@ const onSearch = async () => {
     } else {
         getActuatorList()
     }
-
 }
 
 // ############ 查看详情 #############
@@ -116,14 +118,14 @@ const onMonitor = (actuator) => {
 <template>
     <span>执行节点列表</span>
     <span>
-        <a-input-search class="search-container" placeholder="请输入你要搜索的节点" v-model:value="appName" @search="onSearch" />
+        <a-input-search class="search-container" placeholder="请输入你要搜索的节点" v-model:value="name" @search="onSearch" />
     </span>
     <br />
     <div>
         <!-- 调度结点列表 -->
         <a-table :columns="columns" :data-source="actuatorList">
             <!-- 行数据 -->
-            <template #bodyCell="{ column, text, record }">
+            <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'actions'">
                     <a-space>
                         <a-button type="primary" @click="onDetail(record)">查看详情</a-button>

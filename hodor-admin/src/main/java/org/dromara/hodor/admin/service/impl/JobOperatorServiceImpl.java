@@ -17,6 +17,8 @@
 
 package org.dromara.hodor.admin.service.impl;
 
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.hodor.admin.core.MsgCode;
 import org.dromara.hodor.admin.exception.ServiceException;
@@ -25,12 +27,19 @@ import org.dromara.hodor.client.HodorApiClient;
 import org.dromara.hodor.client.api.JobApi;
 import org.dromara.hodor.common.utils.Utils;
 import org.dromara.hodor.core.PageInfo;
+import org.dromara.hodor.core.dag.FlowData;
 import org.dromara.hodor.core.entity.JobInfo;
 import org.dromara.hodor.core.service.JobInfoService;
 import org.dromara.hodor.model.enums.JobStatus;
+import org.dromara.hodor.model.enums.Priority;
+import org.dromara.hodor.model.job.JobDesc;
 import org.dromara.hodor.model.job.JobKey;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * JobOperatorServiceImpl
@@ -64,14 +73,17 @@ public class JobOperatorServiceImpl implements JobOperatorService {
     @Override
     @Transactional
     public JobInfo addJob(JobInfo jobInfo) {
-        final JobInfo result = jobInfoService.addJob(jobInfo);
+        //final JobInfo result = jobInfoService.addJob(jobInfo);
+        if (jobInfoService.isExists(jobInfo)) {
+            throw new ServiceException(MsgCode.CREATE_JOB_ERROR, "Job already exists");
+        }
         try {
-            jobApi.registerJob(result);
+            jobApi.registerJob(jobInfo);
         } catch (Exception e) {
             log.error("Create job error", e);
             throw new ServiceException(MsgCode.CREATE_JOB_ERROR, e.getMessage());
         }
-        return result;
+        return jobInfo;
     }
 
     @Override
@@ -92,15 +104,15 @@ public class JobOperatorServiceImpl implements JobOperatorService {
     }
 
     @Override
-    @Transactional
     public Boolean deleteById(Long id) {
         final JobInfo jobInfo = jobInfoService.queryById(id);
         if (jobInfo == null) {
             throw new ServiceException(MsgCode.INVALID_JOB_ID, id);
         }
         try {
-            if (jobInfoService.deleteById(id)) {
-                jobApi.deleteJob(JobKey.of(jobInfo.getGroupName(), jobInfo.getJobName()));
+            final boolean deleted = jobInfoService.deleteById(id);
+            if (deleted) {
+                jobApi.deleteJob(jobInfo);
             }
         } catch (Exception e) {
             throw new ServiceException(MsgCode.DELETE_JOB_ERROR, e.getMessage());
@@ -109,7 +121,6 @@ public class JobOperatorServiceImpl implements JobOperatorService {
     }
 
     @Override
-    @Transactional
     public Boolean stopById(Long id) {
         final JobInfo jobInfo = jobInfoService.queryById(id);
         if (jobInfo == null) {
@@ -124,7 +135,7 @@ public class JobOperatorServiceImpl implements JobOperatorService {
         }
 
         try {
-            jobApi.stopJob(jobKey);
+            jobApi.stopJob(jobInfo);
         } catch (Exception e) {
             throw new ServiceException(MsgCode.STOP_JOB_ERROR, e.getMessage());
         }
@@ -132,7 +143,6 @@ public class JobOperatorServiceImpl implements JobOperatorService {
     }
 
     @Override
-    @Transactional
     public Boolean resumeById(Long id) {
         final JobInfo jobInfo = jobInfoService.queryById(id);
         if (jobInfo == null) {
@@ -161,13 +171,42 @@ public class JobOperatorServiceImpl implements JobOperatorService {
             throw new ServiceException(MsgCode.INVALID_JOB_ID, id);
         }
 
-        final JobKey jobKey = JobKey.of(jobInfo.getGroupName(), jobInfo.getJobName());
         try {
-            jobApi.executeJob(jobKey);
+            jobApi.executeJob(jobInfo);
         } catch (Exception e) {
             throw new ServiceException(MsgCode.EXECUTE_JOB_ERROR, e.getMessage());
         }
         return true;
     }
 
+    @Override
+    public Boolean uploadJobs(FlowData flowData) {
+        List<JobDesc> jobDescList = new ArrayList<>();
+        for (FlowData f : flowData.getNodes()) {
+            // 1. 创建JobInfo
+            Map<String, Object> config = f.getConfig();
+            JobInfo jobInfo = new JobInfo();
+            jobInfo.setGroupName(flowData.getGroupName());
+            jobInfo.setJobName(f.getJobName());
+            jobInfo.setJobCommand((String) config.get("jobCommand"));
+            jobInfo.setJobCommandType((String) config.get("jobCommandType"));
+            jobInfo.setPriority(Priority.valueOf((Integer) config.get("priority")));
+            jobInfo.setJobParameters(String.valueOf(config.get("jobParameters")));
+            jobInfo.setTimeout((Integer) config.get("timeout"));
+            jobInfo.setRetryCount((Integer) config.get("retryCount"));
+
+            // 2. 任务是否已经存在
+            if (jobInfoService.isExists(jobInfo)) {
+                throw new ServiceException(MsgCode.UPLOAD_JOB_ERROR, "Job already exists");
+            }
+            jobDescList.add(jobInfo);
+        }
+        try {
+            jobApi.registerJobs(jobDescList);
+        } catch (Exception e) {
+            log.error("upload jobs error", e);
+            throw new ServiceException(MsgCode.UPLOAD_JOB_ERROR, e.getMessage());
+        }
+        return true;
+    }
 }

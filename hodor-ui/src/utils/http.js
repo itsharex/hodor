@@ -1,5 +1,17 @@
 import axios from 'axios'
 import { message } from 'ant-design-vue';
+import JSONBIG from 'json-bigint'
+
+// 设置响应数据的转换函数,使用JSONBIG解析响应数据,解决精度丢失问题
+axios.defaults.transformResponse = [
+  function (data) {
+    const json = JSONBIG({
+      storeAsString: true
+    })
+    const res = json.parse(data)
+    return res
+  }
+]
 
 // 创建axios实例
 const httpInstance = axios.create({
@@ -9,6 +21,9 @@ const httpInstance = axios.create({
 
 // axios请求拦截器
 httpInstance.interceptors.request.use(config => {
+  // 请求头添加API-KEY
+  const apiKey = 'b50fd4d4d71935b7c2a001b87f068c4f'
+  config.headers['API-KEY'] = apiKey
   return config
 }, e => Promise.reject(e))
 
