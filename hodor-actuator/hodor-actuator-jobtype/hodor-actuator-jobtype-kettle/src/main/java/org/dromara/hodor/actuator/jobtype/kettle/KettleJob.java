@@ -19,7 +19,9 @@ package org.dromara.hodor.actuator.jobtype.kettle;
 
 import org.apache.logging.log4j.Logger;
 import org.dromara.hodor.actuator.api.utils.Props;
-import org.dromara.hodor.actuator.jobtype.api.executor.AbstractJob;
+import org.pentaho.di.core.logging.LogLevel;
+import org.pentaho.di.job.Job;
+import org.pentaho.di.repository.Repository;
 
 /**
  * KettleJob
@@ -27,33 +29,42 @@ import org.dromara.hodor.actuator.jobtype.api.executor.AbstractJob;
  * @author tomgs
  * @since 1.0
  */
-public class KettleJob extends AbstractJob {
-
-    private final String jobId;
-
-    private final Props sysProps;
+public class KettleJob extends AbstractKettleJob<Job> {
 
     private final Props jobProps;
 
     private final Logger log;
 
+    private Job kettleJob;
+
     public KettleJob(String jobId, Props sysProps, Props jobProps, Logger log) {
         super(jobId, sysProps, jobProps, log);
-        this.jobId = jobId;
-        this.sysProps = sysProps;
         this.jobProps = jobProps;
         this.log = log;
     }
 
     @Override
-    public void run() throws Exception {
-        // 1、设置资源库
-        // 2、初始化环境
+    public Job buildKettleExecutor(Repository repository, String path, String jobName, LogLevel logLevel) throws Exception {
         // 3、执行job
+        kettleJob = KettleProcess.createKettleJob(repository, path, jobName,
+            jobProps.getMapByPrefix("kettle.params"),
+            jobProps.getMapByPrefix("kettle.variables"));
+        kettleJob.setLogLevel(logLevel);
+        return kettleJob;
     }
 
     @Override
-    public void cancel() throws Exception {
-        super.cancel();
+    public int execute(Job job, int timeout) {
+        kettleJob.start();
+        kettleJob.waitUntilFinished(timeout);
+        return kettleJob.getErrors();
+    }
+
+    @Override
+    public void cancel() {
+        if (kettleJob != null) {
+            log.info("KettleJob stop");
+            kettleJob.stopAll();
+        }
     }
 }
