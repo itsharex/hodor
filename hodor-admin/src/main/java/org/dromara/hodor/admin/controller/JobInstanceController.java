@@ -7,6 +7,7 @@ import org.dromara.hodor.admin.core.Result;
 import org.dromara.hodor.admin.core.ResultUtil;
 import org.dromara.hodor.admin.service.ActuatorOperatorService;
 import org.dromara.hodor.admin.service.LogService;
+import org.dromara.hodor.client.model.KillJobRequest;
 import org.dromara.hodor.client.model.KillJobResult;
 import org.dromara.hodor.client.model.LogQueryRequest;
 import org.dromara.hodor.client.model.LogQueryResult;
@@ -16,6 +17,7 @@ import org.dromara.hodor.core.service.JobExecDetailService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,8 +45,8 @@ public class JobInstanceController {
     @Operation(summary = "分页查询任务执行明细")
     @GetMapping
     public Result<PageInfo<JobExecDetail>> queryByPage(JobExecDetail jobExecDetail,
-                                                 @RequestParam(value = "pageNo") Integer pageNo,
-                                                 @RequestParam(value = "pageSize") Integer pageSize) {
+                                                       @RequestParam(value = "pageNo") Integer pageNo,
+                                                       @RequestParam(value = "pageSize") Integer pageSize) {
         PageInfo<JobExecDetail> pageInfo = jobExecDetailService.queryByPage(jobExecDetail, pageNo, pageSize);
         return ResultUtil.success(pageInfo);
     }
@@ -75,9 +77,9 @@ public class JobInstanceController {
     }
 
     @Operation(summary = "杀死正在执行的任务")
-    @PutMapping("/kill")
-    public Result<KillJobResult> killRunningJob(@RequestBody JobExecDetail jobExecDetail) throws Exception {
-        return ResultUtil.success(actuatorOperatorService.killRunningJob(jobExecDetail));
+    @PostMapping("/kill")
+    public Result<KillJobResult> killRunningJob(@RequestBody KillJobRequest killJobRequest) throws Exception {
+        return ResultUtil.success(actuatorOperatorService.killRunningJob(killJobRequest));
     }
 
 }
