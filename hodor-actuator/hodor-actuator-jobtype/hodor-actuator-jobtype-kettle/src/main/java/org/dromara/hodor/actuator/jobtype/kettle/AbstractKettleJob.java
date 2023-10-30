@@ -17,12 +17,15 @@
 
 package org.dromara.hodor.actuator.jobtype.kettle;
 
+import cn.hutool.core.io.FileUtil;
+import java.nio.file.Paths;
 import org.apache.logging.log4j.Logger;
 import org.dromara.hodor.actuator.api.core.ExecutableJobContext;
 import org.dromara.hodor.actuator.api.exceptions.JobExecutionException;
-import org.dromara.hodor.actuator.api.utils.Props;
 import org.dromara.hodor.actuator.jobtype.api.executor.AbstractJob;
+import org.dromara.hodor.actuator.jobtype.api.executor.AbstractProcessJob;
 import org.dromara.hodor.actuator.jobtype.api.executor.CommonJobProperties;
+import org.dromara.hodor.common.utils.Props;
 import org.dromara.hodor.common.utils.StringUtils;
 import org.pentaho.di.core.logging.KettleLogStore;
 import org.pentaho.di.core.logging.KettleLoggingEventListener;
@@ -45,7 +48,7 @@ public abstract class AbstractKettleJob<T> extends AbstractJob {
 
     private final Logger log;
 
-    protected AbstractKettleJob(String jobId, Props sysProps, Props jobProps, Logger log) {
+    public AbstractKettleJob(String jobId, Props sysProps, Props jobProps, Logger log) {
         super(jobId, sysProps, jobProps, log);
         this.jobId = jobId;
         this.sysProps = sysProps;
@@ -58,21 +61,30 @@ public abstract class AbstractKettleJob<T> extends AbstractJob {
         ExecutableJobContext jobContext = this.jobProps.getObj(CommonJobProperties.JOB_CONTEXT);
         log.info("Start running kettle job [{}]", jobId);
 
-        String repositoryType = jobProps.getString(KettleConstant.REPOSITORY_TYPE, KettleConstant.FILE_TYPE);
-        String repositoryPath = jobProps.getString(KettleConstant.REPOSITORY_PATH,
-            sysProps.getString("kettle.repository", ""));
-        String path = jobProps.getString(KettleConstant.PATH);
-        String plugins = jobProps.getString(KettleConstant.PLUGINS,
-            sysProps.getString("kettle.plugins", ""));
-        String loglevel = jobProps.getString(KettleConstant.LOG_LEVEL);
         String jobName = jobProps.getString(KettleConstant.NAME, jobContext.getJobKey().getJobName());
+        String repositoryType = jobProps.getString(KettleConstant.REPOSITORY_TYPE, KettleConstant.FILE_TYPE);
+        String repositoryPath = jobProps.getString(KettleConstant.REPOSITORY_PATH, "");
+        String workPath = Paths.get(jobProps.getString(AbstractProcessJob.WORKING_DIR), jobName).toString();
+        String path = jobProps.getString(KettleConstant.PATH, "");
+        String plugins = jobProps.getString(KettleConstant.PLUGINS, "");
+        String loglevel = jobProps.getString(KettleConstant.LOG_LEVEL, "Debug");
 
+        // 不指定kettle仓库目录的情况下使用指定文件路径的方式
+        if (StringUtils.isBlank(repositoryPath)) {
+            path = workPath;
+        }
+        // 如果指定文件的方式执行, 就不用指定仓库
+        if (FileUtil.isFile(workPath) && FileUtil.exist(workPath)) {
+            repositoryPath = "";
+            path = workPath;
+        }
+
+        log.info("Kettle config jobName [{}]", jobName);
         log.info("Kettle config repository type [{}]", repositoryType);
         log.info("Kettle config repository path [{}]", repositoryPath);
         log.info("Kettle config path [{}]", path);
         log.info("Kettle config plugins [{}]", plugins);
         log.info("Kettle config loglevel [{}]", loglevel);
-        log.info("Kettle config jobName [{}]", jobName);
 
         // 1、初始化环境
         KettleProcess.init(plugins);

@@ -19,9 +19,10 @@
         <module>hodor-scheduler</module>
         <module>hodor-examples</module>
         <module>hodor-model</module>
-        <module>hodor-extension</module>
+        <module>hodor-cache</module>
         <module>hodor-actuator</module>
         <module>hodor-dist</module>
+        <module>hodor-storage</module>
     </modules>
 
     <organization>
@@ -92,7 +93,7 @@
         <commons-cli.version>1.3.1</commons-cli.version>
         <httpclient.version>4.2.5</httpclient.version>
         <joda-time.version>2.9.9</joda-time.version>
-        <ratis.version>2.4.1</ratis.version>
+        <ratis.version>2.5.1</ratis.version>
         <rocksdb.version>7.0.3</rocksdb.version>
         <affinity.version>3.1.7</affinity.version>
         <knife4j.version>4.1.0</knife4j.version>
@@ -170,12 +171,17 @@
             </dependency>
             <dependency>
                 <groupId>org.dromara</groupId>
-                <artifactId>hodor-extension-cache-embedded-impl</artifactId>
+                <artifactId>hodor-cache-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.dromara</groupId>
-                <artifactId>hodor-extension-cache-redis-impl</artifactId>
+                <artifactId>hodor-cache-all</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>hodor-cache-embedded</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -195,7 +201,12 @@
             </dependency>
             <dependency>
                 <groupId>org.dromara</groupId>
-                <artifactId>hodor-actuator-java</artifactId>
+                <artifactId>hodor-storage-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.dromara</groupId>
+                <artifactId>hodor-storage-all</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

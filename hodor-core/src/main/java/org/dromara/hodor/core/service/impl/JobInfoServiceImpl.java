@@ -3,19 +3,18 @@ package org.dromara.hodor.core.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import java.util.List;
-
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.hodor.common.cron.CronUtils;
 import org.dromara.hodor.common.utils.StringUtils;
+import org.dromara.hodor.common.utils.Utils.Dates;
 import org.dromara.hodor.core.PageInfo;
-import org.dromara.hodor.core.entity.JobExecDetail;
 import org.dromara.hodor.core.entity.JobInfo;
 import org.dromara.hodor.core.mapper.JobInfoMapper;
 import org.dromara.hodor.core.service.JobInfoService;
 import org.dromara.hodor.model.enums.JobStatus;
+import org.dromara.hodor.model.enums.TimeType;
 import org.dromara.hodor.model.scheduler.DataInterval;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -35,6 +34,7 @@ public class JobInfoServiceImpl implements JobInfoService {
 
     @Override
     public JobInfo addJob(JobInfo jobInfo) {
+        jobInfo.setCreateTime(Dates.date());
         jobInfoMapper.insert(jobInfo);
         return jobInfo;
     }
@@ -91,7 +91,9 @@ public class JobInfoServiceImpl implements JobInfoService {
     public List<JobInfo> queryJobInfoByDataInterval(DataInterval dataInterval, JobStatus jobStatus) {
         return jobInfoMapper.selectList(Wrappers.<JobInfo>lambdaQuery()
             .eq(JobInfo::getJobStatus, jobStatus)
-            .ne(JobInfo::getCron, CronUtils.CRON_DISABLED) // cron expression is not null
+            .ne(JobInfo::getTimeType, TimeType.NONE)
+            //.eq(JobInfo::getTimeType, TimeType.CRON)
+            //.ne(JobInfo::getTimeExp, CronUtils.CRON_DISABLED)// cron expression is not null
             .ge(JobInfo::getHashId, dataInterval.getStartInterval())
             .lt(JobInfo::getHashId, dataInterval.getEndInterval()));
     }
@@ -131,6 +133,7 @@ public class JobInfoServiceImpl implements JobInfoService {
 
     @Override
     public JobInfo updateById(JobInfo jobInfo) {
+        jobInfo.setUpdateTime(Dates.date());
         final int result = jobInfoMapper.updateById(jobInfo);
         if (result > 0) {
             return queryById(jobInfo.getId());
@@ -162,6 +165,14 @@ public class JobInfoServiceImpl implements JobInfoService {
             .setCurrentPage((int) page.getCurrent())
             .setPageNo(pageNo)
             .setPageSize(pageSize);
+    }
+
+    @Override
+    public boolean runnableJob(JobInfo jobInfo) {
+        return jobInfoMapper.selectCount(Wrappers.<JobInfo>lambdaQuery()
+            .eq(JobInfo::getGroupName, jobInfo.getGroupName())
+            .eq(JobInfo::getJobName, jobInfo.getJobName())
+            .eq(JobInfo::getJobStatus, JobStatus.STOP)) <= 0;
     }
 
 }

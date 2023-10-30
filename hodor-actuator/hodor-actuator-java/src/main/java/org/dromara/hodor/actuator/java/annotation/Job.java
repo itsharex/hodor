@@ -28,6 +28,14 @@ public @interface Job {
 
     String commandType() default "java";
 
+    String command() default "";
+
+    String zone() default "";
+
+    int fixedDelay() default -1;
+
+    int fixedRate() default -1;
+
     /**
      * cron 表达式
      */
@@ -38,14 +46,13 @@ public @interface Job {
      */
     boolean fireNow() default false;
 
+    boolean misfire() default false;
+
+    boolean failover() default false;
+
     /**
      * job 执行超时时间设置。默认为3分钟，单位：s;
      */
     int timeout() default 180;
-
-    /**
-     * 任务是否广播执行
-     */
-    boolean isBroadcast() default false;
 
 }

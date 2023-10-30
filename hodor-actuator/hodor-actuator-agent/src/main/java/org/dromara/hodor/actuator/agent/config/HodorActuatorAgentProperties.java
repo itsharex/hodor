@@ -19,6 +19,7 @@ package org.dromara.hodor.actuator.agent.config;
 
 import java.util.Map;
 import org.dromara.hodor.actuator.api.config.HodorProperties;
+import org.dromara.hodor.storage.api.StorageConfig;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -35,8 +36,9 @@ public class HodorActuatorAgentProperties {
      */
     private HodorProperties commons;
 
-    // TODO: add actuator java properties
-    private Map<String, Object> bigdata;
+    private Map<String, Object> agentConfig;
+
+    private Map<String, StorageConfig> storageConfig;
 
     public HodorProperties getCommonProperties() {
         return this.commons;
@@ -50,12 +52,19 @@ public class HodorActuatorAgentProperties {
         this.commons = commons;
     }
 
-    public Map<String, Object> getBigdata() {
-        return bigdata;
+    public Map<String, Object> getAgentConfig() {
+        return agentConfig;
     }
 
-    public void setBigdata(Map<String, Object> bigdata) {
-        this.bigdata = bigdata;
+    public void setAgentConfig(Map<String, Object> agentConfig) {
+        this.agentConfig = agentConfig;
     }
 
+    public Map<String, StorageConfig> getStorageConfig() {
+        return storageConfig;
+    }
+
+    public void setStorageConfig(Map<String, StorageConfig> storageConfig) {
+        this.storageConfig = storageConfig;
+    }
 }

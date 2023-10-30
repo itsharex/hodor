@@ -2,17 +2,17 @@ package org.dromara.hodor.actuator.jobtype.bigdata.javautils;
 
 import cn.hutool.core.date.DateUtil;
 import java.io.IOException;
-import java.util.Objects;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.apache.hadoop.yarn.api.records.ApplicationReport;
 import org.apache.hadoop.yarn.api.records.YarnApplicationState;
 import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.dromara.hodor.actuator.api.utils.Props;
 import org.dromara.hodor.actuator.jobtype.api.executor.CommonJobProperties;
 import org.dromara.hodor.actuator.jobtype.api.queue.AbstractAsyncTask;
 import org.dromara.hodor.actuator.jobtype.api.queue.AsyncTask;
 import org.dromara.hodor.actuator.jobtype.bigdata.HadoopJobUtils;
+import org.dromara.hodor.common.utils.Props;
 import org.dromara.hodor.common.utils.StringUtils;
 import org.dromara.hodor.model.enums.JobExecuteStatus;
 import org.dromara.hodor.remoting.api.message.Header;
@@ -31,15 +31,24 @@ import static org.apache.hadoop.yarn.api.records.YarnApplicationState.KILLED;
  * @author tomgs
  * @since 1.0
  **/
+@Data
+@EqualsAndHashCode(callSuper = true)
 public class AsyncJobStateTask extends AbstractAsyncTask {
 
-    private final Logger logger = LogManager.getLogger(AsyncJobStateTask.class);
+    private final Logger logger;
 
-    private String appId;
+    private final String appId;
 
-    private Long requestId;
+    private final Long requestId;
 
-    private Props props;
+    private final Props props;
+
+    public AsyncJobStateTask(String applicationId, Long requestId, Props props, Logger logger) {
+        this.appId = applicationId;
+        this.requestId = requestId;
+        this.props = props;
+        this.logger = logger;
+    }
 
     @Override
     public AsyncTask runTask() {
@@ -51,30 +60,30 @@ public class AsyncJobStateTask extends AbstractAsyncTask {
         }
         logger.info(StringUtils.format("AsyncJobStateTask ## report: {}", report));
 
-        if (report != null && isFinished(report)) {
-            RequestContext context = (RequestContext) props.get(CommonJobProperties.REQUEST_CONTEXT);
-            JobExecuteResponse response = new JobExecuteResponse();
-            response.setRequestId(requestId);
-            response.setStatus(changeStatusCode(report));
-            response.setCompleteTime(DateUtil.formatDateTime(DateUtil.date(report.getFinishTime())));
-            response.setProcessTime(report.getFinishTime() - report.getStartTime());
-
-            byte[] body = context.serializer().serialize(RemotingResponse.succeeded(response));
-            RemotingMessage remotingMessage = new RemotingMessage();
-            remotingMessage.setHeader(Header.builder()
-                .magic(context.requestHeader().getMagic())
-                .id(context.requestHeader().getId())
-                .version(context.requestHeader().getVersion())
-                .attachment(context.requestHeader().getAttachment())
-                .type(context.requestHeader().getType())
-                .length(body.length)
-                .build());
-            remotingMessage.setBody(body);
-            context.channel().send(remotingMessage);
-            return null;
+        if (report == null || !isFinished(report)) {
+            return this;
         }
 
-        return this;
+        RequestContext context = props.getObj(CommonJobProperties.REQUEST_CONTEXT);
+        JobExecuteResponse response = new JobExecuteResponse();
+        response.setRequestId(requestId);
+        response.setStatus(changeStatusCode(report));
+        response.setCompleteTime(DateUtil.formatDateTime(DateUtil.date(report.getFinishTime())));
+        response.setProcessTime(report.getFinishTime() - report.getStartTime());
+
+        byte[] body = context.serializer().serialize(RemotingResponse.succeeded(response));
+        RemotingMessage remotingMessage = new RemotingMessage();
+        remotingMessage.setHeader(Header.builder()
+            .magic(context.requestHeader().getMagic())
+            .id(context.requestHeader().getId())
+            .version(context.requestHeader().getVersion())
+            .attachment(context.requestHeader().getAttachment())
+            .type(context.requestHeader().getType())
+            .length(body.length)
+            .build());
+        remotingMessage.setBody(body);
+        context.channel().send(remotingMessage);
+        return null;
     }
 
     private boolean isFinished(ApplicationReport report) {
@@ -95,47 +104,6 @@ public class AsyncJobStateTask extends AbstractAsyncTask {
                 break;
         }
         return status;
-    }
-
-    public String getAppId() {
-        return appId;
-    }
-
-    public void setAppId(String appId) {
-        this.appId = appId;
-    }
-
-    public Long getRequestId() {
-        return requestId;
-    }
-
-    public void setRequestId(Long requestId) {
-        this.requestId = requestId;
-    }
-
-    public Props getProps() {
-        return props;
-    }
-
-    public void setProps(Props props) {
-        this.props = props;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        AsyncJobStateTask that = (AsyncJobStateTask) o;
-        return appId.equals(that.appId) && requestId.equals(that.requestId) && props.equals(that.props);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(appId, requestId, props);
     }
 }
 

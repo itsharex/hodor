@@ -18,7 +18,7 @@
 package org.dromara.hodor.actuator.jobtype.kettle;
 
 import org.apache.logging.log4j.Logger;
-import org.dromara.hodor.actuator.api.utils.Props;
+import org.dromara.hodor.common.utils.Props;
 import org.pentaho.di.core.logging.LogLevel;
 import org.pentaho.di.job.Job;
 import org.pentaho.di.repository.Repository;
@@ -56,7 +56,7 @@ public class KettleJob extends AbstractKettleJob<Job> {
     @Override
     public int execute(Job job, int timeout) {
         kettleJob.start();
-        kettleJob.waitUntilFinished(timeout);
+        kettleJob.waitUntilFinished(timeout * 1000L);
         return kettleJob.getErrors();
     }
 

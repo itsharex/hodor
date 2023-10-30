@@ -22,13 +22,20 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.hodor.admin.domain.UserInfo;
+import org.dromara.hodor.admin.core.MsgCode;
+import org.dromara.hodor.admin.dto.user.UserInfo;
+import org.dromara.hodor.admin.exception.ServiceException;
+import org.dromara.hodor.admin.service.ActuatorOperatorService;
 import org.dromara.hodor.admin.service.JobGroupService;
-import org.dromara.hodor.common.utils.DateUtils;
+import org.dromara.hodor.common.utils.StringUtils;
+import org.dromara.hodor.common.utils.Utils.Dates;
 import org.dromara.hodor.core.PageInfo;
 import org.dromara.hodor.core.entity.JobGroup;
+import org.dromara.hodor.core.entity.JobInfo;
 import org.dromara.hodor.core.mapper.JobGroupMapper;
+import org.dromara.hodor.core.mapper.JobInfoMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * JobGroupServiceImpl
@@ -41,7 +48,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JobGroupServiceImpl implements JobGroupService {
 
+    private final ActuatorOperatorService actuatorOperatorService;
+
     private final JobGroupMapper jobGroupMapper;
+
+    private final JobInfoMapper jobInfoMapper;
 
     @Override
     public PageInfo<JobGroup> queryGroupListPaging(UserInfo user, String groupName, Integer pageNo, Integer pageSize) {
@@ -58,22 +69,48 @@ public class JobGroupServiceImpl implements JobGroupService {
     }
 
     @Override
+    @Transactional
     public JobGroup createGroup(UserInfo user, JobGroup group) {
         setGroupInfo(user, group);
-        group.setCreatedAt(DateUtils.nowDate());
+        group.setCreatedAt(Dates.date());
         jobGroupMapper.insert(group);
+
+        try {
+            actuatorOperatorService.binding(group.getClusterName(), group.getGroupName());
+        } catch (Exception e) {
+            throw new ServiceException(MsgCode.BINDING_GROUP_ERROR, e.getMessage());
+        }
         return group;
     }
 
     @Override
+    @Transactional
     public void updateJobGroup(UserInfo user, JobGroup group) {
         setGroupInfo(user, group);
         jobGroupMapper.updateById(group);
+
+        try {
+            actuatorOperatorService.binding(group.getClusterName(), group.getGroupName());
+        } catch (Exception e) {
+            throw new ServiceException(MsgCode.BINDING_GROUP_ERROR, e.getMessage());
+        }
     }
 
     @Override
-    public void deleteJobGroup(UserInfo user, int id) {
+    public void deleteJobGroup(UserInfo user, long id) {
+        final JobGroup jobGroup = jobGroupMapper.selectById(id);
+        final Long count = jobInfoMapper.selectCount(Wrappers.<JobInfo>lambdaQuery()
+            .eq(JobInfo::getGroupName, jobGroup.getGroupName()));
+        if (count > 0) {
+            throw new ServiceException(MsgCode.DELETE_GROUP_ERROR, StringUtils.format("Current group has {} jobs", count));
+        }
         jobGroupMapper.deleteById(id);
+
+        try {
+            actuatorOperatorService.unbinding(jobGroup.getClusterName(), jobGroup.getGroupName());
+        } catch (Exception e) {
+            throw new ServiceException(MsgCode.UNBINDING_GROUP_ERROR, e.getMessage());
+        }
     }
 
     @Override
@@ -85,7 +122,7 @@ public class JobGroupServiceImpl implements JobGroupService {
         group.setCreateUser(user.getUsername());
         group.setUserId(user.getId());
         group.setTenantId(user.getTenantId());
-        group.setUpdatedAt(DateUtils.nowDate());
+        group.setUpdatedAt(Dates.date());
     }
 
 }

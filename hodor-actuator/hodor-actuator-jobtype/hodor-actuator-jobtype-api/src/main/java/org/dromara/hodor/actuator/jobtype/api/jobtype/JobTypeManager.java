@@ -21,14 +21,14 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.Logger;
 import org.dromara.hodor.actuator.api.core.JobLogger;
-import org.dromara.hodor.actuator.api.utils.Props;
-import org.dromara.hodor.actuator.api.utils.PropsUtils;
+import org.dromara.hodor.actuator.api.core.JobLoggerManager;
 import org.dromara.hodor.actuator.jobtype.api.exception.JobExecutionException;
 import org.dromara.hodor.actuator.jobtype.api.executor.CommonJobProperties;
 import org.dromara.hodor.actuator.jobtype.api.executor.JavaProcessJob;
@@ -36,6 +36,8 @@ import org.dromara.hodor.actuator.jobtype.api.executor.Job;
 import org.dromara.hodor.actuator.jobtype.api.executor.NoopJob;
 import org.dromara.hodor.actuator.jobtype.api.executor.ProcessJob;
 import org.dromara.hodor.actuator.jobtype.api.utils.Utils;
+import org.dromara.hodor.common.utils.Props;
+import org.dromara.hodor.common.utils.PropsUtils;
 
 @Slf4j
 public class JobTypeManager {
@@ -64,11 +66,15 @@ public class JobTypeManager {
 
     private JobTypePluginSet pluginSet;
 
+    private final Logger logger;
+
     public JobTypeManager(final String jobtypePluginDir, final Props globalProperties,
                           final ClassLoader parentClassLoader) {
         this.jobTypePluginDir = jobtypePluginDir;
         this.parentLoader = parentClassLoader;
         this.globalProperties = globalProperties;
+        this.logger = new JobLoggerManager("dummy", null, Paths.get("/dev/null"))
+            .createJobLogger().getLogger();
 
         loadPlugins();
     }
@@ -239,8 +245,8 @@ public class JobTypeManager {
         try {
             final Props fakeSysProps = new Props(pluginLoadProps);
             final Props fakeJobProps = new Props(pluginJobProps);
-            Utils.callConstructor(clazz, "dummy", fakeSysProps,
-                fakeJobProps, log);
+            Utils.callConstructor(clazz, ARG_TYPES, new Object[]{"dummy", fakeSysProps,
+                fakeJobProps, logger});
         } catch (final Throwable t) {
             log.info("Jobtype " + jobTypeName + " failed test!", t);
             throw new JobExecutionException(t);

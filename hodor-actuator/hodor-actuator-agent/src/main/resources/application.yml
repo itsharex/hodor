@@ -1,3 +1,7 @@
+spring:
+  application:
+    name: hodor-actuator-agent
+
 hodor:
   commons:
     appName: hodor-actuator-agent
@@ -7,17 +11,53 @@ hodor:
     queueSize: 5000
     poolSize: 500
     dataPath: E:\\data\\hodor-actuator\\agent
-    jobtypePlugins: .\\plugins
+    jobtypePlugins: E:\\data\\hodor-actuator\\agent\\plugins
     dataSourceConfig:
       type: h2
       dataSourceClassName: org.h2.jdbcx.JdbcDataSource
-      url: jdbc:h2:file:E:\\data\\hodor-actuator\\agent\\db_hodor;IGNORECASE=TRUE;AUTO_SERVER=TRUE
+      url: jdbc:h2:file:E:\\data\\hodor-actuator\\agent\\db\\db_hodor;IGNORECASE=TRUE;AUTO_SERVER=TRUE
       # url: jdbc:h2:tcp://localhost:9090/E:\\data\\hodor-scheduler\\db_hodor;IGNORECASE=TRUE
       username: test
       password: test
       dataSourceProperties:
         minimumIdle: 4
         maximumPoolSize: 16
+  storageConfig:
+    local:
+      basePath: E:\\data\\hodor-actuator\\job-resources\\
+    hdfs:
+      user: test
+      url: hdfs://testcluster
+      nameServices: testcluster
+      nameNodes: nn1,nn2
+      rpcAddress: bigdata-hdp-nodename-1:8020,bigdata-hdp-nodename-2:8020
+      basePath: /hodor-fs
+    ftp:
+      host: 192.168.3.100
+      port: 2121
+      user: root
+      password: 123456
+      domain: ftp://127.0.0.1:2121/
+      basePath: hodor-ftp/
+    sftp:
+      host: 127.0.0.1
+      port: 2121
+      user: root
+      password: 123456
+      domain: ftp://127.0.0.1:2121/
+      basePath: hodor-sftp/
+      privateKeyPath: /private.key
+    s3:
+      accessKey: xxx
+      secretKey: xxx
+      # 与 endpoint 参数至少填一个
+      region: xxx
+      # # 与 region 参数至少填一个
+      endpoint: xxx
+      bucketName: xxx
+      domain: xxxx
+      basePath: hodor-s3/
+
 logging:
   level:
     root: info

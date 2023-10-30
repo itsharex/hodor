@@ -3,7 +3,7 @@ package org.dromara.hodor.actuator.jobtype.bigdata.asyncHadoop;
 import java.util.Set;
 import org.apache.logging.log4j.Logger;
 import org.dromara.hodor.actuator.api.exceptions.JobExecutionException;
-import org.dromara.hodor.actuator.api.utils.Props;
+import org.dromara.hodor.common.utils.Props;
 import org.dromara.hodor.actuator.jobtype.api.queue.AsyncTaskStateChecker;
 import org.dromara.hodor.actuator.jobtype.bigdata.HadoopJavaJob;
 import org.dromara.hodor.actuator.jobtype.bigdata.HadoopJobUtils;
@@ -51,12 +51,10 @@ public class AsyncHadoopJavaJob extends HadoopJavaJob {
     }
 
     private int getQueueSize(String applicationId, Long requestId) {
-        AsyncJobStateTask task = new AsyncJobStateTask();
-        task.setAppId(applicationId);
-        task.setRequestId(requestId);
-        task.setProps(props);
+        AsyncJobStateTask task = new AsyncJobStateTask(applicationId, requestId, props, logger);
         AsyncTaskStateChecker stateCheckHandler = AsyncTaskStateChecker.getInstance();
-        return stateCheckHandler.addTask(task);
+        stateCheckHandler.addTask(task);
+        return stateCheckHandler.queueSize();
     }
 
 }

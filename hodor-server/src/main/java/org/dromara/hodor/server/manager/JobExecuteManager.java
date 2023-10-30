@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.hodor.common.Host;
 import org.dromara.hodor.common.extension.ExtensionLoader;
 import org.dromara.hodor.common.utils.StringUtils;
+import org.dromara.hodor.common.utils.ThreadUtils;
 import org.dromara.hodor.core.entity.JobExecDetail;
 import org.dromara.hodor.core.recoder.JobExecuteRecorder;
 import org.dromara.hodor.model.enums.JobExecuteStatus;
@@ -19,7 +20,7 @@ import org.dromara.hodor.remoting.api.message.Header;
 import org.dromara.hodor.remoting.api.message.MessageType;
 import org.dromara.hodor.remoting.api.message.RemotingMessage;
 import org.dromara.hodor.remoting.api.message.RemotingResponse;
-import org.dromara.hodor.remoting.api.message.request.AbstractRequestBody;
+import org.dromara.hodor.remoting.api.message.RequestBody;
 import org.dromara.hodor.remoting.api.message.request.JobExecuteStatusRequest;
 import org.dromara.hodor.remoting.api.message.request.KillRunningJobRequest;
 import org.dromara.hodor.remoting.api.message.response.JobExecuteResponse;
@@ -27,8 +28,6 @@ import org.dromara.hodor.remoting.api.message.response.JobExecuteStatusResponse;
 import org.dromara.hodor.remoting.api.message.response.KillRunningJobResponse;
 import org.dromara.hodor.scheduler.api.HodorJobExecutionContext;
 import org.dromara.hodor.server.ServiceProvider;
-
-import java.util.Date;
 
 /**
  * job status manager
@@ -45,12 +44,16 @@ public class JobExecuteManager {
 
     private final RemotingMessageSerializer serializer;
 
+    private final RemotingClient remotingClient;
+
     private final TypeReference<RemotingResponse<JobExecuteStatusResponse>> typeReference;
 
     private JobExecuteManager() {
         this.jobExecuteRecorder = ServiceProvider.getInstance().getBean(JobExecuteRecorder.class);
         this.serializer = ExtensionLoader.getExtensionLoader(RemotingMessageSerializer.class).getDefaultJoin();
-        this.typeReference = new TypeReference<RemotingResponse<JobExecuteStatusResponse>>() { };
+        this.typeReference = new TypeReference<RemotingResponse<JobExecuteStatusResponse>>() {
+        };
+        this.remotingClient = new RemotingClient();
     }
 
     public static JobExecuteManager getInstance() {
@@ -66,10 +69,10 @@ public class JobExecuteManager {
 
     public boolean isRunning(JobKey jobKey) {
         JobExecDetail jobExecDetail = jobExecuteRecorder.getJobExecDetail(jobKey);
-        if (jobExecDetail == null
-            || jobExecDetail.getExecuteStatus() != JobExecuteStatus.READY
-            || jobExecDetail.getExecuteStatus() != JobExecuteStatus.PENDING
-            || jobExecDetail.getExecuteStatus() != JobExecuteStatus.RUNNING) {
+        if (jobExecDetail == null || jobExecDetail.getActuatorEndpoint() == null
+            || (jobExecDetail.getExecuteStatus() != JobExecuteStatus.READY
+            && jobExecDetail.getExecuteStatus() != JobExecuteStatus.PENDING
+            && jobExecDetail.getExecuteStatus() != JobExecuteStatus.RUNNING)) {
             return false;
         }
         // 去执行端查询状态，并且更新状态
@@ -99,16 +102,35 @@ public class JobExecuteManager {
 
     public void addSchedulerEndJob(HodorJobExecutionContext context, Host host) {
         JobExecDetail jobExecDetail = buildSchedulerEndJobExecDetail(context, host);
-        jobExecuteRecorder.addJobExecDetail(jobExecDetail);
         jobExecuteRecorder.recordJobExecDetail(JobExecuteRecorder.OP_UPDATE, jobExecDetail);
+        jobExecuteRecorder.addJobExecDetail(jobExecDetail);
+    }
+
+    public void addSchedulerFailedJob(HodorJobExecutionContext context, Exception e) {
+        JobDesc jobDesc = context.getJobDesc();
+        JobExecDetail jobExecDetail = new JobExecDetail();
+        jobExecDetail.setId(context.getRequestId());
+        jobExecDetail.setInstanceId(context.getInstanceId());
+        jobExecDetail.setGroupName(jobDesc.getGroupName());
+        jobExecDetail.setJobName(jobDesc.getJobName());
+        jobExecDetail.setSchedulerEndpoint(StringUtils.splitToList(context.getSchedulerName(), StringUtils.UNDER_LINE_SEPARATOR).get(1));
+        jobExecDetail.setScheduleStart(DateUtil.date());
+        jobExecDetail.setScheduleEnd(DateUtil.date());
+        jobExecDetail.setExecuteStatus(JobExecuteStatus.ERROR);
+        jobExecDetail.setShardingCount(context.getShardingCount());
+        jobExecDetail.setShardingId(context.getShardingId());
+        jobExecDetail.setShardingParams(context.getShardingParams());
+        jobExecDetail.setComments(ThreadUtils.getStackTraceInfo(e));
+        jobExecuteRecorder.recordJobExecDetail(JobExecuteRecorder.OP_INSERT, jobExecDetail);
+        removeRunningJob(context.getJobKey());
     }
 
     public void addFinishJob(JobExecuteResponse jobExecuteResponse) {
         JobExecDetail jobExecDetail = buildFinishJobExecDetail(jobExecuteResponse);
+        jobExecuteRecorder.recordJobExecDetail(JobExecuteRecorder.OP_UPDATE, jobExecDetail);
         if (JobExecuteStatus.isFinished(jobExecDetail.getExecuteStatus())) {
             removeRunningJob(jobExecuteResponse.getJobKey());
         }
-        jobExecuteRecorder.recordJobExecDetail(JobExecuteRecorder.OP_UPDATE, jobExecDetail);
     }
 
     public JobExecuteStatusResponse queryExecuteJobStatus(Host host, JobExecuteStatusRequest request) {
@@ -119,20 +141,25 @@ public class JobExecuteManager {
         JobDesc jobDesc = context.getJobDesc();
         JobExecDetail jobExecDetail = new JobExecDetail();
         jobExecDetail.setId(context.getRequestId());
+        jobExecDetail.setInstanceId(context.getInstanceId());
         jobExecDetail.setGroupName(jobDesc.getGroupName());
         jobExecDetail.setJobName(jobDesc.getJobName());
         jobExecDetail.setSchedulerEndpoint(StringUtils.splitToList(context.getSchedulerName(), StringUtils.UNDER_LINE_SEPARATOR).get(1));
-        jobExecDetail.setScheduleStart(DateUtil.date(new Date()));
+        jobExecDetail.setScheduleStart(DateUtil.date());
         jobExecDetail.setExecuteStatus(JobExecuteStatus.READY);
+        jobExecDetail.setShardingCount(context.getShardingCount());
+        jobExecDetail.setShardingId(context.getShardingId());
+        jobExecDetail.setShardingParams(context.getShardingParams());
         return jobExecDetail;
     }
 
     private JobExecDetail buildSchedulerEndJobExecDetail(HodorJobExecutionContext context, Host host) {
         JobExecDetail jobExecDetail = new JobExecDetail();
         jobExecDetail.setId(context.getRequestId());
+        jobExecDetail.setInstanceId(context.getInstanceId());
         jobExecDetail.setGroupName(context.getJobKey().getGroupName());
         jobExecDetail.setJobName(context.getJobKey().getJobName());
-        jobExecDetail.setScheduleEnd(DateUtil.date(new Date()));
+        jobExecDetail.setScheduleEnd(DateUtil.date());
         jobExecDetail.setActuatorEndpoint(host.getEndpoint());
         jobExecDetail.setExecuteStatus(JobExecuteStatus.PENDING);
         return jobExecDetail;
@@ -141,6 +168,7 @@ public class JobExecuteManager {
     private JobExecDetail buildFinishJobExecDetail(JobExecuteResponse response) {
         JobExecDetail jobExecDetail = new JobExecDetail();
         jobExecDetail.setId(response.getRequestId());
+        jobExecDetail.setInstanceId(response.getInstanceId());
         jobExecDetail.setExecuteStatus(response.getStatus());
         if (!StringUtils.isBlank(response.getStartTime())) {
             jobExecDetail.setExecuteStart(DateUtil.parse(response.getStartTime(), DatePattern.NORM_DATETIME_FORMAT));
@@ -167,21 +195,22 @@ public class JobExecuteManager {
         return this.executeRequest(host, killRunningJobRequest, MessageType.KILL_JOB_REQUEST);
     }
 
-    public <R> R executeRequest(Host host, AbstractRequestBody requestBody, MessageType messageType) {
+    @SuppressWarnings("unchecked")
+    public <R> R executeRequest(Host host, RequestBody requestBody, MessageType messageType) {
         byte[] body = serializer.serialize(requestBody);
         Header header = Header.builder()
-                .id(requestBody.getRequestId())
-                .type(messageType.getType())
-                .length(body.length)
-                .version(RemotingConst.DEFAULT_VERSION)
-                .build();
+            .id(requestBody.getRequestId())
+            .type(messageType.getType())
+            .length(body.length)
+            .version(RemotingConst.DEFAULT_VERSION)
+            .build();
         RemotingMessage remotingRequest = RemotingMessage.builder()
-                .header(header)
-                .body(body)
-                .build();
+            .header(header)
+            .body(body)
+            .build();
         try {
-            RemotingMessage remotingMessage = RemotingClient.getInstance().sendSyncRequest(host, remotingRequest, 1500);
-            RemotingResponse<R> remotingResponse = serializer.deserialize(remotingMessage.getBody(), typeReference.getType());
+            RemotingMessage remotingMessage = remotingClient.sendSyncRequest(host, remotingRequest, 1500);
+            RemotingResponse<R> remotingResponse = serializer.deserialize(remotingMessage.getBody(), RemotingResponse.class);
             if (!remotingResponse.isSuccess()) {
                 log.error("request failure, code: {}, msg: {}", remotingResponse.getCode(), remotingResponse.getMsg());
             }
@@ -191,5 +220,4 @@ public class JobExecuteManager {
         }
         return null;
     }
-
 }

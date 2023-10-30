@@ -18,17 +18,13 @@ import org.dromara.hodor.model.job.JobDesc;
 @TableName("hodor_job_info")
 public class JobInfo extends JobDesc {
 
-    private JobStatus jobStatus;
-
-    private Date activeTime;
-
     private Date nextExecuteTime;
 
     private Date prevExecuteTime;
 
     private Date createTime;
 
-    private String jobDataPath;
+    private Date updateTime;
 
     private String jobDesc;
 

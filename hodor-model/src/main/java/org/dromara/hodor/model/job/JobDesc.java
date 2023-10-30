@@ -5,8 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.dromara.hodor.model.enums.JobType;
-import org.dromara.hodor.model.enums.Priority;
+import org.dromara.hodor.model.enums.*;
 
 /**
  * job info describe
@@ -20,60 +19,69 @@ import org.dromara.hodor.model.enums.Priority;
 @AllArgsConstructor
 public class JobDesc {
 
-  private Long id;
+    private Long id;
 
-  private Long hashId;
+    private Long hashId;
 
-  private String jobCategory;
+    private String jobCategory;
 
-  private String groupName;
+    private String groupName;
 
-  private String jobName;
+    private String jobName;
 
-  /**
-   * 任务类型：普通任务、定时任务、工作流任务
-   */
-  private JobType jobType;
+    private JobStatus jobStatus;
 
-  private String jobPath;
+    /**
+     * 任务类型：普通任务、工作流任务、分片任务
+     */
+    private JobType jobType;
 
-  /**
-   * 任务命令类型：java、shell、python等，根据执行器支持执行的任务
-   */
-  private String jobCommandType;
+    /**
+     * 任务命令类型：java、shell、python等，根据执行器支持执行的任务
+     */
+    private String jobCommandType;
 
-  private String jobCommand;
+    /**
+     * 任务执行的命令，Java任务即执行的方法
+     */
+    private String jobCommand;
 
-  private Priority priority;
+    /**
+     * 调度策略
+     */
+    private ScheduleStrategy scheduleStrategy;
 
-  private Boolean isDependence;
+    /**
+     * 调度策略表达式
+     */
+    private String scheduleExp;
 
-  private String cron;
+    private TimeType timeType;
 
-  private Integer shardingCount;
+    private String timeExp;
 
-  private String jobParameters;
+    private String timeZone;
 
-  private String extensibleParameters;
+    private String jobParameters;
 
-  private Boolean failover;
+    private String extensibleParameters;
 
-  private Boolean misfire;
+    private Priority priority;
 
-  private Boolean fireNow;
+    private Boolean failover;
 
-  private Boolean isOnce;
+    private Boolean misfire;
 
-  private Boolean isBroadcast;
+    private Boolean fireNow;
 
-  private String slaveIp;
+    private Integer timeout;
 
-  private Integer timeout;
+    private Date startTime;
 
-  private Date endTime;
+    private Date endTime;
 
-  private Integer retryCount;
+    private Integer retryCount;
 
-  private Integer version;
+    private Integer version;
 
 }

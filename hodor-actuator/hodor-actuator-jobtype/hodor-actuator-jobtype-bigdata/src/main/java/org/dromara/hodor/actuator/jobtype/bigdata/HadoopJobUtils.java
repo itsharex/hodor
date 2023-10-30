@@ -48,7 +48,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.logaggregation.ContainerLogsRequest;
 import org.apache.hadoop.yarn.logaggregation.LogCLIHelpers;
 import org.apache.logging.log4j.Logger;
-import org.dromara.hodor.actuator.api.utils.Props;
+import org.dromara.hodor.common.utils.Props;
 import org.dromara.hodor.actuator.jobtype.bigdata.security.commons.HadoopSecurityManager;
 import org.dromara.hodor.actuator.jobtype.bigdata.security.commons.HadoopSecurityManagerException;
 
@@ -165,7 +165,7 @@ public class HadoopJobUtils {
   public static void addAdditionalNamenodesToPropsFromMRJob(Props props, Logger log) {
     String additionalNamenodes =
         (new Configuration()).get(MAPREDUCE_JOB_OTHER_NAMENODES);
-    if (additionalNamenodes != null && additionalNamenodes.length() > 0) {
+    if (additionalNamenodes != null && !additionalNamenodes.isEmpty()) {
       log.info("Found property " + MAPREDUCE_JOB_OTHER_NAMENODES +
           " = " + additionalNamenodes + "; setting additional namenodes");
       HadoopJobUtils.addAdditionalNamenodesToProps(props, additionalNamenodes);
@@ -183,7 +183,7 @@ public class HadoopJobUtils {
    */
   public static void addAdditionalNamenodesToProps(Props props, String additionalNamenodes) {
     String otherNamenodes = props.getString(OTHER_NAMENODES_PROPERTY);
-    if (otherNamenodes != null && otherNamenodes.length() > 0) {
+    if (otherNamenodes != null && !otherNamenodes.isEmpty()) {
       props.put(OTHER_NAMENODES_PROPERTY, otherNamenodes + "," + additionalNamenodes);
     } else {
       props.put(OTHER_NAMENODES_PROPERTY, additionalNamenodes);

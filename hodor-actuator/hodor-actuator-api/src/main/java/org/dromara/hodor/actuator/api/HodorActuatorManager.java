@@ -19,6 +19,7 @@ import org.dromara.hodor.common.storage.db.DBOperator;
 import org.dromara.hodor.common.storage.db.DataSourceConfig;
 import org.dromara.hodor.common.storage.db.HodorDataSource;
 import org.dromara.hodor.common.utils.Utils.Assert;
+import org.dromara.hodor.model.actuator.JobTypeInfo;
 import org.dromara.hodor.remoting.api.RemotingMessageSerializer;
 
 /**
@@ -38,7 +39,7 @@ public class HodorActuatorManager {
 
     private final DBOperator dbOperator;
 
-    private final HodorApiClient hodorApiClient;
+    private final HodorActuatorApiClient hodorActuatorApiClient;
 
     private final ExecutorManager executorManager;
 
@@ -64,7 +65,7 @@ public class HodorActuatorManager {
         this.jobRegister = jobRegister;
         this.dbOperator = dbOperator();
         this.executorManager = new ExecutorManager(properties);
-        this.hodorApiClient = new HodorApiClient(properties);
+        this.hodorActuatorApiClient = new HodorActuatorApiClient(properties);
         this.requestHandleManager = new RequestHandleManager(properties, jobRegister, executorManager,
             ClientChannelManager.getInstance(), dbOperator);
         this.remotingMessageSerializer = ExtensionLoader.getExtensionLoader(RemotingMessageSerializer.class).getDefaultJoin();
@@ -74,7 +75,7 @@ public class HodorActuatorManager {
     private void init() {
         final NodeManager nodeManager = new NodeManager(properties, executorManager);
         this.executorServer = new ExecutorServer(requestHandleManager, remotingMessageSerializer, properties);
-        this.msgSender = new MsgSender(hodorApiClient, nodeManager, jobRegister);
+        this.msgSender = new MsgSender(hodorActuatorApiClient, nodeManager, jobRegister);
         this.hodorDatabaseSetup = new HodorDatabaseSetup(dbOperator);
         this.heartbeatSenderService = new ScheduledThreadPoolExecutor(2,
             HodorThreadFactory.create("hodor-heartbeat-sender", true),
@@ -103,8 +104,9 @@ public class HodorActuatorManager {
     }
 
     public void registerJobs() throws Exception {
-        hodorApiClient.registerJobTypeName(jobRegister.registerJobType());
-        hodorApiClient.registerJobs(jobRegister.registerJobs());
+        String clusterName = jobRegister.bindingCluster();
+        hodorActuatorApiClient.registerJobTypeName(new JobTypeInfo(clusterName, jobRegister.registerJobType()));
+        hodorActuatorApiClient.registerJobs(jobRegister.registerJobs());
     }
 
     private void initHodorClientData() throws SQLException {
@@ -114,7 +116,7 @@ public class HodorActuatorManager {
 
     private void startExecutorServer() {
         Thread executorServerThread = new Thread(executorServer::start, "hodor-scheduler-executor-server");
-        executorServerThread.setDaemon(true);
+        executorServerThread.setDaemon(false);
         executorServerThread.start();
     }
 

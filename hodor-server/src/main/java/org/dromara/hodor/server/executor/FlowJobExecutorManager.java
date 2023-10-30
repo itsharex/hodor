@@ -19,6 +19,7 @@ import org.dromara.hodor.model.job.JobKey;
 import org.dromara.hodor.remoting.api.message.response.KillRunningJobResponse;
 import org.dromara.hodor.scheduler.api.HodorJobExecutionContext;
 import org.dromara.hodor.server.ServiceProvider;
+import org.dromara.hodor.server.executor.dispatch.JobDispatcher;
 import org.dromara.hodor.server.executor.handler.DagService;
 import org.dromara.hodor.server.executor.handler.HodorFlowJobRequestHandler;
 import org.dromara.hodor.server.manager.JobExecuteManager;
@@ -229,7 +230,7 @@ public class FlowJobExecutorManager extends AbstractAsyncEventPublisher<Node> {
     }
 
     private HodorJobExecutionContext getHodorJobExecutionContext(Node node) {
-        return new HodorJobExecutionContext(node.getNodeId(),
+        return new HodorJobExecutionContext(node.getDag().getDagId(), node.getNodeId(),
             JobKey.of(node.getDag().getName()),
             (JobDesc) node.getRawData(),
             node.getDag().getSchedulerName(),

@@ -18,10 +18,14 @@ indent_size = 4
 indent_style = tab
 tab_width = 4
 
-[lib/**.js]
+[*.js]
 indent_style = space
 indent_size = 2
 
 [{package.json,.travis.yml}]
+indent_style = space
+indent_size = 2
+
+[*.vue]
 indent_style = space
 indent_size = 2

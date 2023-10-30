@@ -25,12 +25,25 @@ package org.dromara.hodor.core;
  */
 public interface Constants {
 
+    String SCHEDULER_NAME = "schedulerName";
+
     class JobConstants {
 
-        public static final String CRON_KEY = "cron";
+        public static final String TIME_TYPE_KEY = "timeType";
 
-        public static final String COMMAND_TYPE_KEY = "jobCommandType";
+        public static final String TIME_EXP_KEY = "timeExp";
 
+        public static final String COMMAND_TYPE_KEY = "commandType";
+
+        public static final String COMMAND_KEY = "command";
+
+        public static final String JOB_STAGE_KEY = "stage";
+
+        public static final String SPLIT_STAGE = "split_stage";
+
+        public static final String MAP_STAGE = "map_stage";
+
+        public static final String REDUCE_STAGE = "reduce_stage";
     }
 
     /**
@@ -67,6 +80,5 @@ public interface Constants {
         public static final String RAW_DATA = "rawData";
 
     }
-
 
 }

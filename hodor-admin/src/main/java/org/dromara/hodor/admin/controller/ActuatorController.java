@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.dromara.hodor.admin.core.Result;
 import org.dromara.hodor.admin.core.ResultUtil;
 import org.dromara.hodor.admin.core.UserContext;
-import org.dromara.hodor.admin.domain.UserInfo;
+import org.dromara.hodor.admin.dto.user.UserInfo;
 import org.dromara.hodor.admin.service.ActuatorOperatorService;
 import org.dromara.hodor.model.actuator.ActuatorInfo;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +49,13 @@ public class ActuatorController {
     public Result<List<ActuatorInfo>> getActuatorByName(@RequestParam String name) throws Exception {
         final List<ActuatorInfo> actuatorInfos = actuatorOperatorService.getActuatorByName(name);
         return ResultUtil.success(actuatorInfos);
+    }
+
+    @Operation(summary = "获取指定cluster任务类型")
+    @GetMapping("/jobTypeNames")
+    public Result<List<String>> getJobTypeNames(@RequestParam String clusterName) throws Exception {
+        List<String> jobTypeNames = actuatorOperatorService.getJobTypeNames(clusterName);
+        return ResultUtil.success(jobTypeNames);
     }
 
 }
